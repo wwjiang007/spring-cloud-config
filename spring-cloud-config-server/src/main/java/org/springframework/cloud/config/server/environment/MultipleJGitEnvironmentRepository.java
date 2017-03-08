@@ -27,6 +27,7 @@ import java.util.Map;
 import org.springframework.beans.BeanUtils;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.cloud.config.environment.Environment;
+import org.springframework.cloud.config.server.support.GitCredentialsProviderFactory;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.util.PatternMatchUtils;
 import org.springframework.util.StringUtils;
@@ -61,6 +62,9 @@ public class MultipleJGitEnvironmentRepository extends JGitEnvironmentRepository
 
 	@Override
 	public void afterPropertiesSet() throws Exception {
+		GitCredentialsProviderFactory credentialFactory = new GitCredentialsProviderFactory();
+		super.setGitCredentialsProvider(credentialFactory.createFor(getUri(), 
+				getUsername(), getPassword(), getPassphrase()));
 		super.afterPropertiesSet();
 		for (String name : this.repos.keySet()) {
 			PatternMatchingJGitEnvironmentRepository repo = this.repos.get(name);
@@ -74,6 +78,18 @@ public class MultipleJGitEnvironmentRepository extends JGitEnvironmentRepository
 			if (getTimeout() != 0 && repo.getTimeout() == 0) {
 				repo.setTimeout(getTimeout());
 			}
+			String user = repo.getUsername();
+			String pass = repo.getPassword();
+			String passphrase = repo.getPassphrase();
+			if (user == null) {
+				user = getUsername();
+				pass = getPassword();
+			}
+			if (passphrase == null) {
+				passphrase = getPassphrase();
+			}
+			repo.setGitCredentialsProvider(credentialFactory.createFor(repo.getUri(), 
+					user, pass, passphrase));
 			repo.afterPropertiesSet();
 		}
 	}

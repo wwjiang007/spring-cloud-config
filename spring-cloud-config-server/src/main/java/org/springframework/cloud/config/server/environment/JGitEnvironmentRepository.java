@@ -16,8 +16,6 @@
 
 package org.springframework.cloud.config.server.environment;
 
-import static org.springframework.util.StringUtils.hasText;
-
 import java.io.File;
 import java.io.IOException;
 import java.util.HashSet;
@@ -41,16 +39,24 @@ import org.eclipse.jgit.api.TransportCommand;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.api.errors.RefNotFoundException;
 import org.eclipse.jgit.lib.Ref;
-import org.eclipse.jgit.transport.*;
+import org.eclipse.jgit.transport.CredentialsProvider;
+import org.eclipse.jgit.transport.FetchResult;
+import org.eclipse.jgit.transport.JschConfigSessionFactory;
 import org.eclipse.jgit.transport.OpenSshConfig.Host;
+import org.eclipse.jgit.transport.SshSessionFactory;
+import org.eclipse.jgit.transport.TagOpt;
+import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 import org.eclipse.jgit.util.FileUtils;
 import org.springframework.beans.factory.InitializingBean;
+import org.springframework.cloud.config.server.support.PassphraseCredentialsProvider;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.io.UrlResource;
 import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
 
 import com.jcraft.jsch.Session;
+
+import static org.springframework.util.StringUtils.hasText;
 
 /**
  * An {@link EnvironmentRepository} backed by a single git repository.
@@ -84,6 +90,11 @@ public class JGitEnvironmentRepository extends AbstractScmEnvironmentRepository
 	private JGitEnvironmentRepository.JGitFactory gitFactory = new JGitEnvironmentRepository.JGitFactory();
 
 	private String defaultLabel = DEFAULT_LABEL;
+	
+	/**
+	 * The credentials provider to use to connect to the Git repository.
+	 */
+	private CredentialsProvider gitCredentialsProvider;
 
 	/**
 	 * Flag to indicate that the repository should force pull. If true discard any local
@@ -150,6 +161,7 @@ public class JGitEnvironmentRepository extends AbstractScmEnvironmentRepository
 	public void afterPropertiesSet() throws Exception {
 		Assert.state(getUri() != null,
 				"You need to configure a uri for the git repository");
+		initialize();
 		if (this.cloneOnStart) {
 			initClonedRepository();
 		}
@@ -287,10 +299,7 @@ public class JGitEnvironmentRepository extends AbstractScmEnvironmentRepository
 
 		setTimeout(fetch);
 		try {
-			if (hasText(getUsername())) {
-				setCredentialsProvider(fetch);
-			}
-
+			setCredentialsProvider(fetch);
 			FetchResult result = fetch.call();
 			if(result.getTrackingRefUpdates() != null && result.getTrackingRefUpdates().size() > 0) {
 				this.logger.info("Fetched for remote " + label + " and found " + result.getTrackingRefUpdates().size()
@@ -385,9 +394,7 @@ public class JGitEnvironmentRepository extends AbstractScmEnvironmentRepository
 		CloneCommand clone = this.gitFactory.getCloneCommandByCloneRepository()
 				.setURI(getUri()).setDirectory(getBasedir());
 		setTimeout(clone);
-		if (hasText(getUsername())) {
-			setCredentialsProvider(clone);
-		}
+		setCredentialsProvider(clone);
 		try {
 			return clone.call();
 		}
@@ -409,11 +416,11 @@ public class JGitEnvironmentRepository extends AbstractScmEnvironmentRepository
 	}
 
 	private void initialize() {
-		if (getUri().startsWith("file:") && !this.initialized) {
+		if (!this.initialized) {
 			SshSessionFactory.setInstance(new JschConfigSessionFactory() {
 				@Override
 				protected void configure(Host hc, Session session) {
-					session.setConfig("StrictHostKeyChecking", "no");
+					session.setConfig("StrictHostKeyChecking", isStrictHostKeyChecking() ? "yes" : "no");
 				}
 			});
 			this.initialized = true;
@@ -421,8 +428,13 @@ public class JGitEnvironmentRepository extends AbstractScmEnvironmentRepository
 	}
 
 	private void setCredentialsProvider(TransportCommand<?, ?> cmd) {
-		cmd.setCredentialsProvider(
-				new UsernamePasswordCredentialsProvider(getUsername(), getPassword()));
+		if (hasText(getUsername())) {
+			cmd.setCredentialsProvider(
+					new UsernamePasswordCredentialsProvider(getUsername(), getPassword()));
+		} else if (hasText(getPassphrase())) {
+			cmd.setCredentialsProvider(
+					new PassphraseCredentialsProvider(getPassphrase()));
+		}
 	}
 
 	private void setTimeout(TransportCommand<?, ?> pull) {
@@ -487,5 +499,19 @@ public class JGitEnvironmentRepository extends AbstractScmEnvironmentRepository
 			CloneCommand command = Git.cloneRepository();
 			return command;
 		}
+	}
+
+	/**
+	 * @return the gitCredentialsProvider
+	 */
+	public CredentialsProvider getGitCredentialsProvider() {
+		return gitCredentialsProvider;
+	}
+
+	/**
+	 * @param gitCredentialsProvider the gitCredentialsProvider to set
+	 */
+	public void setGitCredentialsProvider(CredentialsProvider gitCredentialsProvider) {
+		this.gitCredentialsProvider = gitCredentialsProvider;
 	}
 }
