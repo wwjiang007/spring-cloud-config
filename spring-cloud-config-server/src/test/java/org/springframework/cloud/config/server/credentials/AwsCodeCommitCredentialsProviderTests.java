@@ -16,8 +16,6 @@
 
 package org.springframework.cloud.config.server.credentials;
 
-import static org.junit.Assert.*;
-
 import java.net.URISyntaxException;
 
 import org.eclipse.jgit.errors.UnsupportedCredentialItem;
@@ -29,6 +27,13 @@ import org.springframework.cloud.config.server.support.AwsCodeCommitCredentialPr
 import org.springframework.cloud.config.server.support.GitCredentialsProviderFactory;
 
 import com.amazonaws.auth.AWSCredentialsProvider;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /**
  * It would be nice to do an integration test, however, this would require
@@ -43,6 +48,7 @@ public class AwsCodeCommitCredentialsProviderTests {
 	private static final String USER = "test";
 	private static final String AWS_REPO = "https://git-codecommit.us-east-1.amazonaws.com/v1/repos/test";
 	private static final String BAD_REPO = "https://amazonaws.com/v1/repos/test";
+  	private static final String CURLY_BRACES_REPO = "https://git-codecommit.us-east-1.amazonaws.com/v1/repos/{application}";
 
 	private AwsCodeCommitCredentialProvider provider;
 	
@@ -106,6 +112,15 @@ public class AwsCodeCommitCredentialsProviderTests {
 		assertFalse(provider.get(new URIish(BAD_REPO), credentialItems));
 	}
 	
+	@Test
+	public void testUriWithCurlyBracesReturnsTrue() throws UnsupportedCredentialItem, URISyntaxException {
+		GitCredentialsProviderFactory factory = new GitCredentialsProviderFactory();
+		provider = (AwsCodeCommitCredentialProvider) 
+		factory.createFor(CURLY_BRACES_REPO, USER, PASSWORD, null);
+		CredentialItem[] credentialItems = makeCredentialItems();
+		assertTrue(provider.get(new URIish(CURLY_BRACES_REPO), credentialItems));
+	}
+  
 	@Test
 	public void testThrowsUnsupportedCredentialException() throws URISyntaxException {
 		CredentialItem[] goodCredentialItems = makeCredentialItems();
