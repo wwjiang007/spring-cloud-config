@@ -17,6 +17,7 @@
 package org.springframework.cloud.config.server.config;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -26,10 +27,13 @@ import org.springframework.cloud.bootstrap.encrypt.KeyProperties.KeyStore;
 import org.springframework.cloud.config.server.encryption.CipherEnvironmentEncryptor;
 import org.springframework.cloud.config.server.encryption.EnvironmentEncryptor;
 import org.springframework.cloud.config.server.encryption.KeyStoreTextEncryptorLocator;
+import org.springframework.cloud.config.server.encryption.LocatorTextEncryptor;
+import org.springframework.cloud.config.server.encryption.SingleTextEncryptorLocator;
 import org.springframework.cloud.config.server.encryption.TextEncryptorLocator;
 import org.springframework.cloud.context.encrypt.EncryptorFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.security.crypto.encrypt.Encryptors;
 import org.springframework.security.crypto.encrypt.TextEncryptor;
 import org.springframework.security.rsa.crypto.KeyStoreKeyFactory;
@@ -37,9 +41,9 @@ import org.springframework.security.rsa.crypto.RsaSecretEncryptor;
 import org.springframework.util.StringUtils;
 
 /**
- * Auto configuration for text encryptors and environment encryptors (non-web stuff).
- * Users can provide beans of the same type as any or all of the beans defined here in
- * application code to override the default behaviour.
+ * Auto configuration for text encryptors and environment encryptors (non-web
+ * stuff). Users can provide beans of the same type as any or all of the beans
+ * defined here in application code to override the default behaviour.
  *
  * @author Bartosz Wojtkiewicz
  * @author Rafal Zukowski
@@ -48,36 +52,34 @@ import org.springframework.util.StringUtils;
  */
 @Configuration
 @EnableConfigurationProperties(KeyProperties.class)
+@Import({SingleTextEncryptorConfiguration.class, DefaultTextEncryptorConfiguration.class})
 public class EncryptionAutoConfiguration {
 
-	@ConditionalOnMissingBean(TextEncryptor.class)
-	protected static class DefaultTextEncryptorConfiguration {
+	@Configuration
+	@ConditionalOnProperty(value = "spring.cloud.config.server.encrypt.enabled", matchIfMissing = true)
+	protected static class EncryptorConfiguration {
+
+		@Autowired(required = false)
+		private TextEncryptorLocator locator;
 
 		@Autowired
-		private KeyProperties key;
+		private TextEncryptor encryptor;
 
 		@Bean
-		public TextEncryptor nullTextEncryptor() {
-			if (StringUtils.hasText(this.key.getKey())) {
-				return new EncryptorFactory().create(this.key.getKey());
+		@ConditionalOnMissingBean
+		public EnvironmentEncryptor environmentEncryptor() {
+			TextEncryptorLocator locator = this.locator;
+			if (locator == null) {
+				locator = new SingleTextEncryptorLocator(encryptor);
 			}
-			return Encryptors.noOpText();
+			return new CipherEnvironmentEncryptor(locator);
 		}
 
 	}
 
-	@Bean
-	@ConditionalOnMissingBean
-	@ConditionalOnProperty(value = "spring.cloud.config.server.encrypt.enabled", matchIfMissing = true)
-	public EnvironmentEncryptor environmentEncryptor(
-			TextEncryptorLocator textEncryptorLocator) {
-		return new CipherEnvironmentEncryptor(textEncryptorLocator);
-	}
-
 	@Configuration
 	@ConditionalOnClass(RsaSecretEncryptor.class)
-	@ConditionalOnProperty(value = "encrypt.keyStore.location", matchIfMissing = false)
-	@EnableConfigurationProperties(KeyProperties.class)
+	@ConditionalOnProperty(prefix = "encrypt.keyStore", value = "location", matchIfMissing = false)
 	protected static class KeyStoreConfiguration {
 
 		@Autowired
@@ -87,8 +89,8 @@ public class EncryptionAutoConfiguration {
 		@ConditionalOnMissingBean
 		public TextEncryptorLocator textEncryptorLocator() {
 			KeyStore keyStore = this.key.getKeyStore();
-			KeyStoreTextEncryptorLocator locator = new KeyStoreTextEncryptorLocator(new KeyStoreKeyFactory(
-					keyStore.getLocation(), keyStore.getPassword().toCharArray()),
+			KeyStoreTextEncryptorLocator locator = new KeyStoreTextEncryptorLocator(
+					new KeyStoreKeyFactory(keyStore.getLocation(), keyStore.getPassword().toCharArray()),
 					keyStore.getSecret(), keyStore.getAlias());
 			locator.setRsaAlgorithm(this.key.getRsa().getAlgorithm());
 			locator.setSalt(this.key.getRsa().getSalt());
@@ -96,6 +98,45 @@ public class EncryptionAutoConfiguration {
 			return locator;
 		}
 
+	}
+
+}
+
+
+@ConditionalOnBean(TextEncryptor.class)
+@ConditionalOnMissingBean(TextEncryptorLocator.class)
+@Configuration
+class SingleTextEncryptorConfiguration {
+
+	@Autowired
+	private TextEncryptor encryptor;
+
+	@Bean
+	public SingleTextEncryptorLocator textEncryptorLocator() {
+		return new SingleTextEncryptorLocator(encryptor);
+	}
+
+}
+
+@ConditionalOnMissingBean(TextEncryptor.class)
+@Configuration
+class DefaultTextEncryptorConfiguration {
+
+	@Autowired
+	private KeyProperties key;
+
+	@Autowired(required = false)
+	private TextEncryptorLocator locator;
+
+	@Bean
+	public TextEncryptor defaultTextEncryptor() {
+		if (locator != null) {
+			return new LocatorTextEncryptor(locator);
+		}
+		if (StringUtils.hasText(this.key.getKey())) {
+			return new EncryptorFactory().create(this.key.getKey());
+		}
+		return Encryptors.noOpText();
 	}
 
 }
