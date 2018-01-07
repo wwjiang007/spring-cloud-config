@@ -6,7 +6,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.context.embedded.LocalServerPort;
+import org.springframework.boot.web.server.LocalServerPort;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.cloud.config.environment.Environment;
@@ -18,7 +18,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 
 @RunWith(SpringRunner.class)
-@SpringBootTest(classes = ConfigServerApplication.class, properties = "spring.cloud.bootstrap.name:enable-bootstrap",
+@SpringBootTest(classes = ConfigServerApplication.class, properties = {"spring.cloud.bootstrap.name:enable-bootstrap",
+		"encrypt.rsa.algorithm=DEFAULT", "encrypt.rsa.strong=false"},
 		webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles({"test", "encrypt"})
 public class BootstrapConfigServerIntegrationTests {

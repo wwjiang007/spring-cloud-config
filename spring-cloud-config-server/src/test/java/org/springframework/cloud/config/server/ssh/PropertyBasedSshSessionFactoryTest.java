@@ -28,7 +28,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.junit.MockitoJUnitRunner;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 
@@ -36,7 +36,11 @@ import com.jcraft.jsch.HostKey;
 import com.jcraft.jsch.HostKeyRepository;
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.Session;
-import com.jcraft.jsch.UserInfo;
+
+import static org.mockito.Matchers.isNull;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
 import static org.mockito.Matchers.isNull;
 import static org.mockito.Mockito.verify;
@@ -132,7 +136,7 @@ public class PropertyBasedSshSessionFactoryTest {
 
 		factory.createSession(hc, null, SshUriPropertyProcessor.getHostname(sshKey.getUri()), 22, null);
 		ArgumentCaptor<HostKey> captor = ArgumentCaptor.forClass(HostKey.class);
-		verify(hostKeyRepository).add(captor.capture(), isNull(UserInfo.class));
+		verify(hostKeyRepository).add(captor.capture(), isNull());
 		HostKey hostKey = captor.getValue();
 		Assert.assertEquals("gitlab.example.local", hostKey.getHost());
 		Assert.assertEquals(HOST_KEY, hostKey.getKey());
@@ -182,7 +186,7 @@ public class PropertyBasedSshSessionFactoryTest {
 			Resource resource = new ClassPathResource(path);
 			try (BufferedReader br = new BufferedReader(new InputStreamReader(resource.getInputStream()))) {
 				StringBuilder builder = new StringBuilder();
-				String line = "";
+				String line;
 				while ((line = br.readLine()) != null) {
 					builder.append(line).append('\n');
 				}

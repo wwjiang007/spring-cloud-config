@@ -27,6 +27,7 @@ import java.util.List;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.boot.Banner.Mode;
+import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.context.PropertyPlaceholderAutoConfiguration;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.context.config.ConfigFileApplicationListener;
@@ -121,7 +122,7 @@ public class NativeEnvironmentRepository
 				PropertyPlaceholderAutoConfiguration.class);
 		ConfigurableEnvironment environment = getEnvironment(profile);
 		builder.environment(environment);
-		builder.web(false).bannerMode(Mode.OFF);
+		builder.web(WebApplicationType.NONE).bannerMode(Mode.OFF);
 		if (!logger.isDebugEnabled()) {
 			// Make the mini-application startup less verbose
 			builder.logStartupInfo(false);
